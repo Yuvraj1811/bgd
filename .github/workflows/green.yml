@@ -1,8 +1,8 @@
-name: Deploy Frontend to VM
+name: Deploy Frontend to Green VM
 
 on:
   workflow_run:
-    workflows: ["Build and Push to ACR"]
+    workflows: ["Deploy Frontend to VM"]
     types:
       - completed
 
@@ -34,12 +34,12 @@ jobs:
             --tenant "$AZURE_TENANT_ID"
           az account show
 
-      - name: Install Docker on Blue VM
+      - name: Install Docker on Green VM
         run: |
           az vm run-command invoke \
            --command-id RunShellScript \
            --resource-group $RG \
-           --name $FRONTEND_VM \
+           --name $GREEN_VM \
            --scripts "
              sudo apt-get update -y
 
@@ -68,13 +68,12 @@ jobs:
              sudo systemctl start docker
              "
 
-      
       - name: Deploy Frontend to VM
         run: |
           az vm run-command invoke \
            --command-id RunShellScript \
            --resource-group $RG \
-           --name $FRONTEND_VM \
+           --name $GREEN_VM \
            --scripts "
            sudo docker stop frontend || true
            sudo docker rm frontend || true
@@ -85,3 +84,22 @@ jobs:
            sudo docker pull $ACR_NAME.azurecr.io/myfrontend:latest
            sudo docker run -d --name frontend -p 80:80 $ACR_NAME.azurecr.io/myfrontend:latest
            "
+
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: List deployment folder
+        run: ls -la deployment
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11" # or 3.10, whichever you want
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install -r deployment/requirements.txt
+
+      - name: Blue-Green Deployment
+        run: python3 deployment/blue_green_deploy.py
