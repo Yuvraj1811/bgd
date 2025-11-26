@@ -12,6 +12,7 @@ env:
   ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
   RG: ${{ secrets.RG_NAME }}
   FRONTEND_VM: ${{ secrets.FRONTEND_VM }}
+  GREEN_VM: ${{ secrets.GREEN_VM }}
 
 jobs:
   deploy:
@@ -67,19 +68,55 @@ jobs:
              sudo systemctl start docker
              "
 
-      - name: Deploy Frontend to VM
+      - name: Install Docker on VM
         run: |
           az vm run-command invoke \
            --command-id RunShellScript \
            --resource-group $RG \
-           --name $FRONTEND_VM \
+           --name $GREEN_VM \
            --scripts "
-           sudo docker stop frontend || true
-           sudo docker rm frontend || true
+             sudo apt-get update -y
 
-           echo $ACR_PASSWORD | sudo docker login $ACR_NAME.azurecr.io \
-               -u $ACR_USERNAME --password-stdin
+             sudo apt-get install -y \
+             ca-certificates \
+             curl \
+             gnupg
 
-           sudo docker pull $ACR_NAME.azurecr.io/myfrontend:latest
-           sudo docker run -d --name frontend -p 80:80 $ACR_NAME.azurecr.io/myfrontend:latest
-           "
+             sudo install -m 0755 -d /etc/apt/keyrings
+
+             curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+             sudo gpg --yes --dearmor -o /etc/apt/keyrings/docker.gpg
+
+             echo \
+              \"deb [arch=\$(dpkg --print-architecture) \
+              signed-by=/etc/apt/keyrings/docker.gpg] \
+              https://download.docker.com/linux/ubuntu \
+              \$(lsb_release -cs) stable\" | \
+              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+             sudo apt-get update -y
+             sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+
+             sudo usermod -aG docker azureuser
+             sudo systemctl enable docker
+             sudo systemctl start docker
+             "
+
+      - name: Blue-Green Deployment
+        run: python deployment/blue_green_deploy.py
+    #   - name: Deploy Frontend to VM
+    #     run: |
+    #       az vm run-command invoke \
+    #        --command-id RunShellScript \
+    #        --resource-group $RG \
+    #        --name $FRONTEND_VM \
+    #        --scripts "
+    #        sudo docker stop frontend || true
+    #        sudo docker rm frontend || true
+
+    #        echo $ACR_PASSWORD | sudo docker login $ACR_NAME.azurecr.io \
+    #            -u $ACR_USERNAME --password-stdin
+
+    #        sudo docker pull $ACR_NAME.azurecr.io/myfrontend:latest
+    #        sudo docker run -d --name frontend -p 80:80 $ACR_NAME.azurecr.io/myfrontend:latest
+    #        "
