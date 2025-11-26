@@ -8,15 +8,15 @@ RESOURCE_GROUP = "rgvm"
 LB_NAME = "lb"
 BACKENDPOOL_NAME = "lbbackeend"
 
-#Public IP
+# Public IP
 BLUE_PUBLIC_IP = "13.71.17.38"
 GREEN_PUBLIC_IP = "4.213.34.38"
 
-#Private IP
+# Private IP
 BLUE_PRIVATE_IP = "172.16.0.4"
 GREEN_PRIVATE_IP = "172.16.1.4"
 
-#LB IP
+# LB IP
 LB_PUBLIC_IP = "98.70.244.206"
 
 # Docker run command
@@ -33,7 +33,8 @@ def deploy_to_green():
     print("Deploying to green")
     ssh = SSHClient()
     ssh.set_missing_host_key_policy(AutoAddPolicy())
-    ssh.connect(GREEN_PUBLIC_IP, username=SSH_USER, password=SSH_PASSWORD, timeout=10)
+    ssh.connect(GREEN_PUBLIC_IP, username=SSH_USER,
+                password=SSH_PASSWORD, timeout=10)
     stdin, stdout, stderr = ssh.exec_command(DOCKER_RUN_COMMAND)
     print(stdout.read().decode())
     ssh.close()
@@ -94,17 +95,12 @@ def rollback_to_blue():
 
 # Main Workflow
 if __name__ == "__main__":
-     deploy_to_green()
+    deploy_to_green()
 
-     print("Checking Green health...")
-     time.sleep(10)
+    print("Checking Green health...")
+    time.sleep(10)
 
-     if check_health():
+    if check_health():
         switch_to_green()
     else:
         rollback_to_blue()
-     
-    
-    
-    
-  
