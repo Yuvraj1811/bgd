@@ -35,15 +35,13 @@ jobs:
       # 4️⃣ Build Docker image
       - name: Build Docker image
         run: |
-          IMAGE="$ACR_NAME.azurecr.io/myfrontend:v1"
+          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/myfrontend:v1"
           docker build -t $IMAGE ./ReactTodoUIMonolith
           echo "IMAGE_NAME=$IMAGE" >> $GITHUB_ENV
-        env:
-          ACR_NAME: ${{ secrets.ACR_NAME }}
 
       # 5️⃣ Push Docker image to ACR
       - name: Push Docker image
-        run: docker push $IMAGE_NAME
+        run: docker push ${{ env.IMAGE_NAME }}
 
       # 6️⃣ SSH to VM and deploy Docker container
       - name: Deploy Docker on VM
@@ -53,13 +51,12 @@ jobs:
           username: azureuser
           password: Azureuser@123
           script: |
+            IMAGE="{{ secrets.ACR_NAME }}.azurecr.io/myfrontend:v1"
             sudo apt update -y
             sudo apt install -y docker.io
             sudo systemctl enable docker
             sudo systemctl start docker
-            docker pull $IMAGE_NAME
-            docker stop myfrontend || true
-            docker rm myfrontend || true
-            docker run -d -p 80:80 --name myfrontend $IMAGE_NAME
-        env:
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+            sudo docker pull $IMAGE
+            sudo docker stop myfrontend || true
+            sudo docker rm myfrontend || true
+            sudo docker run -d -p 80:80 --name myfrontend $IMAGE
