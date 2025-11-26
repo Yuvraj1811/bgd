@@ -51,7 +51,7 @@ jobs:
           username: azureuser
           password: Azureuser@123
           script: |
-            IMAGE="{{ secrets.ACR_NAME }}.azurecr.io/myfrontend:v1"
+            IMAGE="acrfrontend.azurecr.io/myfrontend:v1"
             sudo apt update -y
             sudo apt install -y docker.io
             sudo systemctl enable docker
