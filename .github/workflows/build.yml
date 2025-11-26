@@ -1,0 +1,44 @@
+name: Build and Push Docker Image to ACR
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    env:
+        AZURE_CLIENT_ID: ${{ secrets.azureclientid }}
+        AZURE_CLIENT_SECRET: ${{ secrets.azureclientsecret }}
+        AZURE_TENANT_ID: ${{ secrets.azurtenantid }}
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.azuresubscriptionid }}
+        ACR_NAME: ${{ secrets.acrname }}
+
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Login to Azure
+        run: |
+          az login --service-principal \
+            -u $AZURE_CLIENT_ID \
+            -p $AZURE_CLIENT_SECRET \
+            --tenant $AZURE_TENANT_ID
+          az account set --subscription $AZURE_SUBSCRIPTION_ID
+
+      - name: Login to ACR
+        run: |
+          az acr login --name $ACR_NAME
+
+      - name: Build Docker Image
+        run: |
+          IMAGE="$ACR_NAME.azurecr.io/myfrontend:v1"
+          docker build -t $IMAGE .
+          echo "IMAGE_NAME=$IMAGE" >> $GITHUB_ENV
+
+      - name: Push Docker Image
+        run: |
+          docker push $IMAGE_NAME
