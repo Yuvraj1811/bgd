@@ -108,6 +108,16 @@ jobs:
       - name: List deployment folder
         run: ls -la deployment
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11" # or 3.10, whichever you want
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install -r deployment/requirements.txt
+
       - name: Blue-Green Deployment
         run: python3 deployment/blue_green_deploy.py
     #   - name: Deploy Frontend to VM
