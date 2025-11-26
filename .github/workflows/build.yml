@@ -10,40 +10,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout your code
-      - name: Checkout code
+      # 1️⃣ Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2️⃣ Login to Azure using Service Principal stored in GitHub Secrets
+      # 2️⃣ Build Docker image
+      - name: Build Docker Image
+        env:
+          ACR_NAME: ${{ secrets.ACR_NAME }}
+        run: |
+          IMAGE="$ACR_NAME.azurecr.io/myfrontend:v1"
+          docker build -t $IMAGE ./ReactTodoUIMonolith
+          echo "IMAGE_NAME=$IMAGE" >> $GITHUB_ENV
+
+      # 3️⃣ Login to Azure CLI
       - name: Login to Azure
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         run: |
           az login --service-principal \
                    --username $AZURE_CLIENT_ID \
                    --password $AZURE_CLIENT_SECRET \
                    --tenant $AZURE_TENANT_ID
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
 
-      # 3️⃣ Login to Azure Container Registry
-      - name: Login to ACR
-        run: az acr login --name $ACR_NAME
-        env:
-          ACR_NAME: ${{ secrets.ACR_NAME }}
-
-      # 4️⃣ Build Docker image
-      - name: Build Docker image
+      # 4️⃣ Push Docker image to ACR
+      - name: Push Docker Image
         run: |
-          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/myfrontend:v1"
-          docker build -t $IMAGE ./ReactTodoUIMonolith
-          echo "IMAGE_NAME=$IMAGE" >> $GITHUB_ENV
+          az acr login --name ${{ secrets.ACR_NAME }}
+          docker push $IMAGE_NAME
 
-      # 5️⃣ Push Docker image to ACR
-      - name: Push Docker image
-        run: docker push ${{ env.IMAGE_NAME }}
-
-      # 6️⃣ SSH to VM and deploy Docker container
+      # 5️⃣ Deploy Docker container on the frontend VM
       - name: Deploy Docker on VM
         uses: appleboy/ssh-action@master
         with:
@@ -51,12 +49,23 @@ jobs:
           username: azureuser
           password: Azureuser@123
           script: |
-            IMAGE="acrfrontend.azurecr.io/myfrontend:v1"
-            sudo apt update -y
-            sudo apt install -y docker.io
-            sudo systemctl enable docker
-            sudo systemctl start docker
-            sudo docker pull $IMAGE
-            sudo docker stop myfrontend || true
-            sudo docker rm myfrontend || true
-            sudo docker run -d -p 80:80 --name myfrontend $IMAGE
+            # Install Docker if not installed
+            if ! command -v docker >/dev/null 2>&1; then
+              sudo apt update -y
+              sudo apt install -y docker.io
+              sudo systemctl enable docker
+              sudo systemctl start docker
+            fi
+
+            # Login to ACR
+            echo $AZURE_CLIENT_SECRET | docker login $ACR_NAME.azurecr.io --username $AZURE_CLIENT_ID --password-stdin
+
+            # Pull latest image and deploy
+            docker stop myfrontend || true
+            docker rm myfrontend || true
+            docker pull $ACR_NAME.azurecr.io/myfrontend:v1
+            docker run -d -p 80:80 --name myfrontend $ACR_NAME.azurecr.io/myfrontend:v1
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ACR_NAME: ${{ secrets.ACR_NAME }}
