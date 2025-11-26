@@ -61,10 +61,10 @@ jobs:
             echo $AZURE_CLIENT_SECRET | docker login $ACR_NAME.azurecr.io --username $AZURE_CLIENT_ID --password-stdin
 
             # Pull latest image and deploy
-            docker stop myfrontend || true
-            docker rm myfrontend || true
-            docker pull $ACR_NAME.azurecr.io/myfrontend:v1
-            docker run -d -p 80:80 --name myfrontend $ACR_NAME.azurecr.io/myfrontend:v1
+            sudo docker stop myfrontend || true
+            sudo docker rm myfrontend || true
+            sudo docker pull $ACR_NAME.azurecr.io/myfrontend:v1
+            sudo docker run -d -p 80:80 --name myfrontend $ACR_NAME.azurecr.io/myfrontend:v1
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
