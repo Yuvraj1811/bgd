@@ -74,12 +74,12 @@ jobs:
            --resource-group $RG \
            --name $FRONTEND_VM \
            --scripts "
-           sudo docker stop myfrontend || true
-           sudo docker rm myfrontend || true
+           sudo docker stop frontend || true
+           sudo docker rm frontend || true
 
            echo $ACR_PASSWORD | sudo docker login $ACR_NAME.azurecr.io \
                -u $ACR_USERNAME --password-stdin
 
-           sudo docker pull $ACR_NAME.azurecr.io/react:v1
-           sudo docker run -d --name myfrontend -p 80:80 $ACR_NAME.azurecr.io/react:v1
+           sudo docker pull $ACR_NAME.azurecr.io/myfrontend:latest
+           sudo docker run -d --name frontend -p 80:80 $ACR_NAME.azurecr.io/myfrontend:latest
            "
