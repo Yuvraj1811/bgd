@@ -34,7 +34,7 @@ jobs:
             --tenant "$AZURE_TENANT_ID"
           az account show
 
-      - name: Install Docker on VM
+      - name: Install Docker on Blue VM
         run: |
           az vm run-command invoke \
            --command-id RunShellScript \
@@ -68,7 +68,7 @@ jobs:
              sudo systemctl start docker
              "
 
-      - name: Install Docker on VM
+      - name: Install Docker on Green VM
         run: |
           az vm run-command invoke \
            --command-id RunShellScript \
@@ -102,8 +102,14 @@ jobs:
              sudo systemctl start docker
              "
 
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: List deployment folder
+        run: ls -la deployment
+
       - name: Blue-Green Deployment
-        run: python deployment/blue_green_deploy.py
+        run: python3 deployment/blue_green_deploy.py
     #   - name: Deploy Frontend to VM
     #     run: |
     #       az vm run-command invoke \
