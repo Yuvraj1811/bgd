@@ -1,39 +1,57 @@
-name: Build & Push to ACR
+name: Build and Push to ACR
 
 on:
   push:
     branches:
       - main
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Azure Login using Client Secret
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          auth-type: SERVICE_PRINCIPAL
-
-      - name: Login to ACR
-        run: az acr login --name ${{ secrets.ACR_NAME }}
-
-      - name: Build Docker Image
+      - name: Install Azure CLI
         run: |
-          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/myfrontend:latest"
-          docker build -t $IMAGE .
-          echo "IMAGE_NAME=$IMAGE" >> $GITHUB_ENV
+          # azure cli is usually preinstalled on runners but ensure it's available
+          az --version || (curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash)
 
-      - name: Push Docker Image
-        run: docker push $IMAGE_NAME
+      - name: Login to Azure using Service Principal (explicit)
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -e
+          echo "Logging in to Azure CLI using service principal..."
+          az login --service-principal \
+            --username "$AZURE_CLIENT_ID" \
+            --password "$AZURE_CLIENT_SECRET" \
+            --tenant "$AZURE_TENANT_ID"
+          az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+          az account show
+
+      - name: Build Docker image
+        env:
+          ACR_NAME: ${{ secrets.ACR_NAME }}
+        run: |
+          set -e
+          IMAGE="$ACR_NAME.azurecr.io/myfrontend:latest"
+          echo "Building $IMAGE"
+          docker build -t "$IMAGE" ./ReactTodoUIMonolith
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Login to ACR (az acr login)
+        env:
+          ACR_NAME: ${{ secrets.ACR_NAME }}
+        run: |
+          set -e
+          az acr login --name "$ACR_NAME"
+
+      - name: Push image to ACR
+        run: |
+          set -e
+          docker push "$IMAGE"
