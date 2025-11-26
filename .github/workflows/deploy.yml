@@ -1,0 +1,85 @@
+name: Deploy Frontend to VM
+
+on:
+  workflow_run:
+    workflows: ["Build and Push to ACR"]
+    types:
+      - completed
+
+env:
+  ACR_NAME: ${{ secrets.ACR_NAME }}
+  ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+  ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+  RG: ${{ secrets.RG_NAME }}
+  FRONTEND_VM: ${{ secrets.FRONTEND_VM }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Login to Azure using Service Principal (explicit)
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -e
+          echo "Logging in to Azure CLI using service principal..."
+          az login --service-principal \
+            --username "$AZURE_CLIENT_ID" \
+            --password "$AZURE_CLIENT_SECRET" \
+            --tenant "$AZURE_TENANT_ID"
+          az account show
+
+      - name: Install Docker on VM
+        run: |
+          az vm run-command invoke \
+           --command-id RunShellScript \
+           --resource-group $RG \
+           --name $FRONTEND_VM \
+           --scripts "
+             sudo apt-get update -y
+
+             sudo apt-get install -y \
+             ca-certificates \
+             curl \
+             gnupg
+
+             sudo install -m 0755 -d /etc/apt/keyrings
+
+             curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+             sudo gpg --yes --dearmor -o /etc/apt/keyrings/docker.gpg
+
+             echo \
+              \"deb [arch=\$(dpkg --print-architecture) \
+              signed-by=/etc/apt/keyrings/docker.gpg] \
+              https://download.docker.com/linux/ubuntu \
+              \$(lsb_release -cs) stable\" | \
+              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+             sudo apt-get update -y
+             sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+
+             sudo usermod -aG docker azureuser
+             sudo systemctl enable docker
+             sudo systemctl start docker
+             "
+
+      - name: Deploy Frontend to VM
+        run: |
+          az vm run-command invoke \
+           --command-id RunShellScript \
+           --resource-group $RG \
+           --name $FRONTEND_VM \
+           --scripts "
+           sudo docker stop myfrontend || true
+           sudo docker rm myfrontend || true
+
+           echo $ACR_PASSWORD | sudo docker login $ACR_NAME.azurecr.io \
+               -u $ACR_USERNAME --password-stdin
+
+           sudo docker pull $ACR_NAME.azurecr.io/react:v1
+           sudo docker run -d --name myfrontend -p 80:80 $ACR_NAME.azurecr.io/react:v1
+           "
