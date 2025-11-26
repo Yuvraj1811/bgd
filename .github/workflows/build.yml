@@ -1,77 +1,39 @@
-name: Build and Deploy Frontend
+name: Build & Push to ACR
 
 on:
   push:
     branches:
       - main
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout the code
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2️⃣ Login to Azure using Service Principal
-      - name: Login to Azure
-        run: |
-          az login --service-principal \
-                   --username $AZURE_CLIENT_ID \
-                   --password $AZURE_CLIENT_SECRET \
-                   --tenant $AZURE_TENANT_ID
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-
-      # 3️⃣ Login to Azure Container Registry
-      - name: Login to ACR
-        run: az acr login --name $ACR_NAME
-        env:
-          ACR_NAME: ${{ secrets.ACR_NAME }}
-
-      # 4️⃣ Build Docker image
-      - name: Build Docker image
-        run: |
-          IMAGE="$ACR_NAME.azurecr.io/myfrontend:v1"
-          docker build -t $IMAGE ./ReactTodoUIMonolith
-          echo "IMAGE_NAME=$IMAGE" >> $GITHUB_ENV
-        env:
-          ACR_NAME: ${{ secrets.ACR_NAME }}
-
-      # 5️⃣ Push Docker image to ACR
-      - name: Push Docker image
-        run: docker push $IMAGE_NAME
-
-      # 6️⃣ SSH to VM and deploy Docker container
-      - name: Deploy Docker on VM
-        uses: appleboy/ssh-action@master
+      - name: Azure Login (Service Principal)
+        uses: azure/login@v2
         with:
-          host: 13.71.17.38
-          username: azureuser
-          password: Azureuser@123
-          script: |
-            # Install Docker if not installed
-            if ! command -v docker >/dev/null 2>&1; then
-              sudo apt update -y
-              sudo apt install -y docker.io
-              sudo systemctl enable docker
-              sudo systemctl start docker
-            fi
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          secret: ${{ secrets.AZURE_CLIENT_SECRET }}
 
-            # Docker login (non-interactive)
-            echo $AZURE_CLIENT_SECRET | sudo docker login $ACR_NAME.azurecr.io --username $AZURE_CLIENT_ID --password-stdin
+      - name: Build Docker Image
+        run: |
+          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/myfrontend:latest"
+          docker build -t $IMAGE .
+          echo "IMAGE_NAME=$IMAGE" >> $GITHUB_ENV
 
-            # Pull and run the container
-            IMAGE="$ACR_NAME.azurecr.io/myfrontend:v1"
-            sudo docker stop myfrontend || true
-            sudo docker rm myfrontend || true
-            sudo docker pull $IMAGE
-            sudo docker run -d -p 80:80 --name myfrontend $IMAGE
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ACR_NAME: ${{ secrets.ACR_NAME }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+      - name: Login to ACR
+        run: |
+          az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Push Docker Image
+        run: |
+          docker push $IMAGE_NAME
